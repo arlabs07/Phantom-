@@ -3,15 +3,24 @@ set -o errexit
 
 echo "🔧 Installing dependencies..."
 
-# Set Puppeteer download base URL for Chrome
-export PUPPETEER_DOWNLOAD_BASE_URL="https://storage.googleapis.com/chrome-for-testing-public"
+# Set Puppeteer cache directory
+export PUPPETEER_CACHE_DIR=/opt/render/.cache/puppeteer
+mkdir -p $PUPPETEER_CACHE_DIR
 
-# Install dependencies (npm is more reliable than yarn on Render)
-npm install
+# Install dependencies
+npm ci --only=production
 
-echo "🌐 Ensuring Chromium is installed..."
+echo "🌐 Installing Chromium for Puppeteer..."
 
-# Install Chrome browser for Puppeteer
+# Install Chrome browser
 npx puppeteer browsers install chrome
+
+# Cache Chromium
+if [[ ! -d $PUPPETEER_CACHE_DIR/chrome ]]; then
+  echo "📦 Caching Chromium..."
+  cp -R /opt/render/project/src/.cache/puppeteer/chrome/ $PUPPETEER_CACHE_DIR/ || true
+else
+  echo "✅ Using cached Chromium"
+fi
 
 echo "✅ Build complete!"

@@ -24,20 +24,18 @@ const PORT = process.env.PORT || 3000;
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
 const MAX_SESSIONS = 50;
-const SESSION_TIMEOUT = 10 * 60 * 1000; // 10 minutes
+const SESSION_TIMEOUT = 10 * 60 * 1000;
 
-// Session management
 const sessions = new Map();
 const sessionTimers = new Map();
 
-// Browser pool configuration
 let browserInstance = null;
 let browserRestartInProgress = false;
 
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Health check endpoint
+// Health check
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
@@ -47,11 +45,11 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Initialize browser with error handling
+// Initialize browser
 async function getBrowser() {
   try {
     if (!browserInstance || !browserInstance.isConnected()) {
-      console.log('Launching new browser instance...');
+      console.log('🚀 Launching browser...');
       
       browserInstance = await puppeteer.launch({
         headless: true,
@@ -64,7 +62,6 @@ async function getBrowser() {
           '--disable-features=IsolateOrigins,site-per-process',
           '--window-size=412,915',
           '--disable-web-security',
-          '--disable-features=site-per-process',
           '--no-first-run',
           '--no-zygote',
           '--single-process',
@@ -88,29 +85,28 @@ async function getBrowser() {
         ignoreHTTPSErrors: true
       });
 
-      // Handle browser disconnect
       browserInstance.on('disconnected', () => {
-        console.warn('Browser disconnected unexpectedly');
+        console.warn('⚠️ Browser disconnected');
         browserInstance = null;
         restartBrowser();
       });
 
-      console.log('Browser launched successfully');
+      console.log('✅ Browser launched successfully');
     }
     
     return browserInstance;
   } catch (error) {
-    console.error('Failed to launch browser:', error);
+    console.error('❌ Browser launch failed:', error);
     throw new Error('Browser initialization failed');
   }
 }
 
-// Restart browser with exponential backoff
+// Restart browser
 async function restartBrowser() {
   if (browserRestartInProgress) return;
   
   browserRestartInProgress = true;
-  console.log('Restarting browser...');
+  console.log('🔄 Restarting browser...');
   
   try {
     if (browserInstance) {
@@ -121,21 +117,21 @@ async function restartBrowser() {
     await new Promise(resolve => setTimeout(resolve, 2000));
     await getBrowser();
     
-    console.log('Browser restarted successfully');
+    console.log('✅ Browser restarted');
   } catch (error) {
-    console.error('Browser restart failed:', error);
+    console.error('❌ Browser restart failed:', error);
   } finally {
     browserRestartInProgress = false;
   }
 }
 
-// Retry logic wrapper
+// Retry wrapper
 async function retryOperation(operation, retries = MAX_RETRIES, delay = RETRY_DELAY) {
   for (let i = 0; i < retries; i++) {
     try {
       return await operation();
     } catch (error) {
-      console.warn(`Operation failed (attempt ${i + 1}/${retries}):`, error.message);
+      console.warn(`⚠️ Attempt ${i + 1}/${retries} failed:`, error.message);
       
       if (i === retries - 1) throw error;
       
@@ -144,67 +140,60 @@ async function retryOperation(operation, retries = MAX_RETRIES, delay = RETRY_DE
   }
 }
 
-// Clean up session
+// Cleanup session
 async function cleanupSession(socketId) {
   const session = sessions.get(socketId);
   
   if (session) {
     try {
-      // Clear timeout
       if (sessionTimers.has(socketId)) {
         clearTimeout(sessionTimers.get(socketId));
         sessionTimers.delete(socketId);
       }
       
-      // Close CDP session
       if (session.client) {
         await session.client.detach().catch(() => {});
       }
       
-      // Close page
       if (session.page && !session.page.isClosed()) {
         await session.page.close().catch(() => {});
       }
       
       sessions.delete(socketId);
-      console.log(`Session cleaned up: ${socketId} (${sessions.size} active)`);
+      console.log(`🧹 Session cleaned: ${socketId} (${sessions.size} active)`);
     } catch (error) {
-      console.error('Cleanup error:', error);
+      console.error('❌ Cleanup error:', error);
     }
   }
 }
 
-// Reset session timeout
+// Reset timeout
 function resetSessionTimeout(socketId) {
   if (sessionTimers.has(socketId)) {
     clearTimeout(sessionTimers.get(socketId));
   }
   
   const timer = setTimeout(() => {
-    console.log(`Session timeout: ${socketId}`);
+    console.log(`⏱️ Session timeout: ${socketId}`);
     cleanupSession(socketId);
   }, SESSION_TIMEOUT);
   
   sessionTimers.set(socketId, timer);
 }
 
-// Sanitize HTML to prevent XSS
+// Sanitize HTML
 function sanitizeHTML(html) {
-  // Remove potentially dangerous scripts and event handlers
-  let sanitized = html
+  return html
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
     .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
     .replace(/on\w+\s*=\s*[^\s>]*/gi, '')
     .replace(/javascript:/gi, '');
-  
-  return sanitized;
 }
 
-// Socket.IO connection handling
+// Socket.IO handlers
 io.on('connection', (socket) => {
-  console.log(`Client connected: ${socket.id} (${sessions.size + 1} active)`);
+  console.log(`🔌 Client connected: ${socket.id} (${sessions.size + 1} active)`);
   
-  // Check session limit
   if (sessions.size >= MAX_SESSIONS) {
     socket.emit('error', { 
       message: 'Server at capacity. Please try again later.',
@@ -214,13 +203,11 @@ io.on('connection', (socket) => {
     return;
   }
 
-  // Initialize session
   socket.on('init', async () => {
     try {
       const browser = await retryOperation(() => getBrowser());
       const page = await browser.newPage();
       
-      // Set viewport for mobile
       await page.setViewport({ 
         width: 412, 
         height: 915, 
@@ -229,15 +216,12 @@ io.on('connection', (socket) => {
         deviceScaleFactor: 2
       });
       
-      // Set user agent
       await page.setUserAgent(
         'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'
       );
       
-      // Create CDP session for advanced control
       const client = await page.target().createCDPSession();
       
-      // Enable necessary CDP domains
       await Promise.all([
         client.send('Network.enable'),
         client.send('Page.enable'),
@@ -245,36 +229,24 @@ io.on('connection', (socket) => {
         client.send('Runtime.enable')
       ]);
       
-      // Block unnecessary resources to save bandwidth and memory
       await page.setRequestInterception(true);
       page.on('request', (request) => {
         const resourceType = request.resourceType();
-        const blockResources = ['font', 'media'];
-        
-        if (blockResources.includes(resourceType)) {
+        if (['font', 'media'].includes(resourceType)) {
           request.abort();
         } else {
           request.continue();
         }
       });
       
-      // Handle page crashes
       page.on('error', (error) => {
-        console.error('Page error:', error);
+        console.error('❌ Page error:', error);
         socket.emit('error', { 
           message: 'Page encountered an error',
           code: 'PAGE_ERROR'
         });
       });
       
-      // Handle console messages
-      page.on('console', (msg) => {
-        if (msg.type() === 'error') {
-          console.error('Page console error:', msg.text());
-        }
-      });
-      
-      // Handle navigation
       page.on('framenavigated', async (frame) => {
         if (frame === page.mainFrame()) {
           try {
@@ -282,20 +254,19 @@ io.on('connection', (socket) => {
             const title = await page.title().catch(() => 'Untitled');
             socket.emit('navigation', { url, title });
           } catch (error) {
-            console.error('Navigation event error:', error);
+            console.error('❌ Navigation event error:', error);
           }
         }
       });
       
-      // Store session
       sessions.set(socket.id, { page, browser, client });
       resetSessionTimeout(socket.id);
       
       socket.emit('ready');
-      console.log(`Session initialized: ${socket.id}`);
+      console.log(`✅ Session initialized: ${socket.id}`);
       
     } catch (error) {
-      console.error('Session init error:', error);
+      console.error('❌ Session init error:', error);
       socket.emit('error', { 
         message: 'Failed to initialize browser session',
         code: 'INIT_ERROR'
@@ -303,7 +274,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Navigate to URL
   socket.on('navigate', async ({ url }) => {
     const session = sessions.get(socket.id);
     if (!session) {
@@ -315,16 +285,13 @@ io.on('connection', (socket) => {
       resetSessionTimeout(socket.id);
       const { page } = session;
       
-      // Validate and normalize URL
       if (!url || typeof url !== 'string') {
-        throw new Error('Invalid URL provided');
+        throw new Error('Invalid URL');
       }
       
       let normalizedUrl = url.trim();
       
-      // Add protocol if missing
       if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
-        // Check if it's a search query or domain
         if (normalizedUrl.includes(' ') || !normalizedUrl.includes('.')) {
           normalizedUrl = `https://www.google.com/search?q=${encodeURIComponent(normalizedUrl)}`;
         } else {
@@ -334,7 +301,6 @@ io.on('connection', (socket) => {
       
       socket.emit('loading', { status: true });
       
-      // Navigate with timeout and retry
       await retryOperation(async () => {
         await page.goto(normalizedUrl, {
           waitUntil: 'domcontentloaded',
@@ -342,20 +308,15 @@ io.on('connection', (socket) => {
         });
       });
       
-      // Wait a bit for dynamic content
       await page.waitForTimeout(1000);
       
-      // Get page content with error handling
       const [html, title, currentUrl] = await Promise.all([
-        page.content().catch(() => '<html><body>Failed to load content</body></html>'),
+        page.content().catch(() => '<html><body>Failed to load</body></html>'),
         page.title().catch(() => 'Untitled'),
         Promise.resolve(page.url())
       ]);
       
-      // Sanitize HTML
       const sanitizedHTML = sanitizeHTML(html);
-      
-      // Inject base tag for relative URLs
       const modifiedHTML = sanitizedHTML.replace(
         /<head>/i,
         `<head><base href="${currentUrl}">`
@@ -370,14 +331,14 @@ io.on('connection', (socket) => {
       socket.emit('loading', { status: false });
       
     } catch (error) {
-      console.error('Navigation error:', error);
+      console.error('❌ Navigation error:', error);
       
       let errorMessage = 'Failed to load page';
       
       if (error.message.includes('timeout')) {
-        errorMessage = 'Page load timeout - site may be slow or unavailable';
+        errorMessage = 'Page load timeout - site may be slow';
       } else if (error.message.includes('net::ERR')) {
-        errorMessage = 'Network error - check your connection';
+        errorMessage = 'Network error - check connection';
       }
       
       socket.emit('error', { 
@@ -388,7 +349,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Handle browser actions (back, forward, refresh)
   socket.on('browser-action', async ({ action }) => {
     const session = sessions.get(socket.id);
     if (!session) return;
@@ -436,7 +396,7 @@ io.on('connection', (socket) => {
       socket.emit('loading', { status: false });
       
     } catch (error) {
-      console.error('Browser action error:', error);
+      console.error('❌ Browser action error:', error);
       socket.emit('error', { 
         message: `Failed to ${action}`,
         code: 'ACTION_ERROR'
@@ -445,8 +405,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Handle clicks
-  socket.on('click', async ({ selector, x, y }) => {
+  socket.on('click', async ({ selector }) => {
     const session = sessions.get(socket.id);
     if (!session) return;
 
@@ -455,14 +414,10 @@ io.on('connection', (socket) => {
       const { page } = session;
       
       if (selector) {
-        // Wait for selector with timeout
         await page.waitForSelector(selector, { timeout: 5000 }).catch(() => {});
         await page.click(selector);
-      } else if (x !== undefined && y !== undefined) {
-        await page.mouse.click(x, y);
       }
       
-      // Wait for potential navigation
       await Promise.race([
         page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 5000 }),
         page.waitForTimeout(1000)
@@ -487,11 +442,10 @@ io.on('connection', (socket) => {
       });
       
     } catch (error) {
-      console.error('Click error:', error);
+      console.error('❌ Click error:', error);
     }
   });
 
-  // Handle scrolling
   socket.on('scroll', async ({ deltaY }) => {
     const session = sessions.get(socket.id);
     if (!session) return;
@@ -502,11 +456,10 @@ io.on('connection', (socket) => {
         window.scrollBy(0, delta);
       }, deltaY);
     } catch (error) {
-      console.error('Scroll error:', error);
+      console.error('❌ Scroll error:', error);
     }
   });
 
-  // Handle form input
   socket.on('input', async ({ selector, value }) => {
     const session = sessions.get(socket.id);
     if (!session) return;
@@ -519,39 +472,35 @@ io.on('connection', (socket) => {
       await page.type(selector, value, { delay: 50 });
       
     } catch (error) {
-      console.error('Input error:', error);
+      console.error('❌ Input error:', error);
     }
   });
 
-  // Keep alive ping
   socket.on('ping', () => {
     resetSessionTimeout(socket.id);
     socket.emit('pong');
   });
 
-  // Disconnect handling
   socket.on('disconnect', async (reason) => {
-    console.log(`Client disconnected: ${socket.id}, reason: ${reason}`);
+    console.log(`🔌 Disconnected: ${socket.id}, reason: ${reason}`);
     await cleanupSession(socket.id);
   });
 });
 
 // Graceful shutdown
 const gracefulShutdown = async () => {
-  console.log('Shutting down gracefully...');
+  console.log('🛑 Shutting down gracefully...');
   
-  // Close all sessions
   for (const [socketId] of sessions) {
     await cleanupSession(socketId);
   }
   
-  // Close browser
   if (browserInstance) {
     await browserInstance.close().catch(() => {});
   }
   
   server.close(() => {
-    console.log('Server closed');
+    console.log('✅ Server closed');
     process.exit(0);
   });
 };
@@ -559,13 +508,12 @@ const gracefulShutdown = async () => {
 process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
 
-// Global error handlers
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  console.error('❌ Unhandled Rejection:', promise, 'reason:', reason);
 });
 
 process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
+  console.error('❌ Uncaught Exception:', error);
   gracefulShutdown();
 });
 

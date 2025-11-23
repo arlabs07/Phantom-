@@ -42,7 +42,6 @@
       background: var(--bg-color);
     }
 
-    /* Top Bar - Chrome Mobile Style */
     .top-bar {
       background: var(--bg-color);
       padding: 8px;
@@ -74,7 +73,6 @@
       color: #5f6368;
       transition: background 0.2s;
       user-select: none;
-      -webkit-user-select: none;
     }
 
     .nav-btn:active:not(:disabled) {
@@ -86,7 +84,6 @@
       cursor: not-allowed;
     }
 
-    /* URL Bar */
     .url-container {
       flex: 1;
       background: var(--hover-color);
@@ -96,7 +93,6 @@
       align-items: center;
       gap: 8px;
       min-height: 40px;
-      position: relative;
     }
 
     .lock-icon {
@@ -155,7 +151,6 @@
       flex-shrink: 0;
     }
 
-    /* Content Area */
     .content-wrapper {
       flex: 1;
       overflow: hidden;
@@ -178,7 +173,6 @@
       padding: 0;
     }
 
-    /* Style injected content */
     #browser-content a {
       color: var(--primary-color);
       text-decoration: none;
@@ -192,10 +186,9 @@
     #browser-content input,
     #browser-content textarea,
     #browser-content select {
-      font-size: 16px !important; /* Prevent zoom on iOS */
+      font-size: 16px !important;
     }
 
-    /* Loading Bar */
     .loading-bar {
       position: absolute;
       top: 0;
@@ -219,7 +212,6 @@
       100% { transform: scaleX(1); }
     }
 
-    /* Status Toast */
     .status-toast {
       position: fixed;
       bottom: 20px;
@@ -251,7 +243,6 @@
       background: var(--success-color);
     }
 
-    /* Welcome Screen */
     .welcome-screen {
       display: flex;
       flex-direction: column;
@@ -301,7 +292,6 @@
       font-weight: 500;
     }
 
-    /* Error Screen */
     .error-screen {
       display: flex;
       flex-direction: column;
@@ -346,7 +336,6 @@
       opacity: 0.8;
     }
 
-    /* Connection Status Indicator */
     .connection-status {
       position: fixed;
       top: 60px;
@@ -369,7 +358,6 @@
       50% { opacity: 0.3; }
     }
 
-    /* Responsive Design */
     @media (max-width: 768px) {
       .url-container {
         padding: 0 12px;
@@ -380,7 +368,6 @@
       }
     }
 
-    /* Prevent text selection during interactions */
     .no-select {
       -webkit-user-select: none;
       -moz-user-select: none;
@@ -434,7 +421,6 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    // Configuration
     const CONFIG = {
       RECONNECT_ATTEMPTS: 5,
       RECONNECT_DELAY: 2000,
@@ -442,7 +428,6 @@
       MAX_URL_LENGTH: 2048
     };
 
-    // Socket.IO connection with reconnection strategy
     const socket = io({
       transports: ['websocket', 'polling'],
       reconnectionAttempts: CONFIG.RECONNECT_ATTEMPTS,
@@ -452,7 +437,6 @@
       autoConnect: true
     });
     
-    // DOM Elements
     const urlInput = document.getElementById('url-input');
     const goBtn = document.getElementById('go-btn');
     const backBtn = document.getElementById('back-btn');
@@ -465,23 +449,17 @@
     const connectionStatus = document.getElementById('connection-status');
     const welcomeStatus = document.getElementById('welcome-status');
     
-    // State
     let sessionReady = false;
     let currentUrl = '';
     let isNavigating = false;
     let pingInterval = null;
-    let reconnectAttempts = 0;
     
-    // Initialize
     function init() {
-      console.log('Initializing browser...');
       setupEventListeners();
       updateWelcomeStatus('Connecting to server...');
     }
     
-    // Setup event listeners
     function setupEventListeners() {
-      // Navigation controls
       goBtn.addEventListener('click', () => navigate());
       urlInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') navigate();
@@ -495,7 +473,6 @@
       forwardBtn.addEventListener('click', () => browserAction('forward'));
       refreshBtn.addEventListener('click', () => browserAction('refresh'));
       
-      // Prevent zoom on double tap
       let lastTouchEnd = 0;
       document.addEventListener('touchend', (e) => {
         const now = Date.now();
@@ -505,7 +482,6 @@
         lastTouchEnd = now;
       }, false);
       
-      // Handle visibility change
       document.addEventListener('visibilitychange', () => {
         if (!document.hidden && socket.connected && sessionReady) {
           sendPing();
@@ -513,27 +489,23 @@
       });
     }
     
-    // Socket event handlers
     socket.on('connect', () => {
-      console.log('Connected to server');
+      console.log('✅ Connected to server');
       connectionStatus.classList.remove('disconnected');
-      reconnectAttempts = 0;
       
       updateWelcomeStatus('Initializing browser session...');
       socket.emit('init');
       
-      // Start ping interval
       if (pingInterval) clearInterval(pingInterval);
       pingInterval = setInterval(sendPing, CONFIG.PING_INTERVAL);
     });
     
     socket.on('ready', () => {
       sessionReady = true;
-      console.log('Session ready');
+      console.log('✅ Session ready');
       updateWelcomeStatus('Ready to browse!');
       showToast('Browser ready', 'success');
       
-      // Enable controls
       refreshBtn.disabled = false;
       backBtn.disabled = false;
       forwardBtn.disabled = false;
@@ -551,30 +523,25 @@
     
     socket.on('page-content', ({ html, url, title }) => {
       try {
-        // Update URL bar
         currentUrl = url;
         urlInput.value = url;
         document.title = title || 'Cloud VPN Browser';
         
-        // Update lock icon
         const isSecure = url.startsWith('https://');
         lockIcon.textContent = isSecure ? '🔒' : '🔓';
         lockIcon.classList.toggle('secure', isSecure);
         
-        // Render content
         browserContent.innerHTML = html;
         browserContent.classList.add('rendered');
         
-        // Setup interaction handlers
         setupPageInteractions();
         
-        // Enable navigation buttons
         backBtn.disabled = false;
         forwardBtn.disabled = false;
         refreshBtn.disabled = false;
         
       } catch (error) {
-        console.error('Error rendering page:', error);
+        console.error('❌ Error rendering:', error);
         showError('Failed to render page');
       }
     });
@@ -586,7 +553,7 @@
     });
     
     socket.on('error', ({ message, code }) => {
-      console.error('Server error:', code, message);
+      console.error('❌ Server error:', code, message);
       showToast(message, 'error');
       
       if (code === 'NO_SESSION' || code === 'INIT_ERROR') {
@@ -595,12 +562,10 @@
       }
     });
     
-    socket.on('pong', () => {
-      // Keep alive response
-    });
+    socket.on('pong', () => {});
     
     socket.on('disconnect', (reason) => {
-      console.warn('Disconnected:', reason);
+      console.warn('⚠️ Disconnected:', reason);
       sessionReady = false;
       connectionStatus.classList.add('disconnected');
       
@@ -610,7 +575,6 @@
       }
       
       if (reason === 'io server disconnect') {
-        // Server disconnected us, try to reconnect
         socket.connect();
       }
       
@@ -618,80 +582,70 @@
     });
     
     socket.on('reconnect_attempt', (attemptNumber) => {
-      reconnectAttempts = attemptNumber;
-      console.log(`Reconnection attempt ${attemptNumber}`);
+      console.log(`🔄 Reconnection attempt ${attemptNumber}`);
       updateWelcomeStatus(`Reconnecting... (${attemptNumber}/${CONFIG.RECONNECT_ATTEMPTS})`);
     });
     
-    socket.on('reconnect', (attemptNumber) => {
-      console.log('Reconnected successfully');
+    socket.on('reconnect', () => {
+      console.log('✅ Reconnected');
       showToast('Reconnected!', 'success');
     });
     
     socket.on('reconnect_failed', () => {
-      console.error('Reconnection failed');
-      showError('Unable to connect to server. Please refresh the page.');
+      console.error('❌ Reconnection failed');
+      showError('Unable to connect. Please refresh.');
     });
     
-    // Navigate to URL
     function navigate(url) {
       if (!sessionReady) {
-        showToast('Please wait for browser to initialize', 'error');
+        showToast('Please wait for initialization', 'error');
         return;
       }
       
       if (isNavigating) {
-        showToast('Please wait for current page to load', 'error');
+        showToast('Please wait for current page', 'error');
         return;
       }
       
       if (!url) url = urlInput.value.trim();
       if (!url) return;
       
-      // Validate URL length
       if (url.length > CONFIG.MAX_URL_LENGTH) {
         showToast('URL too long', 'error');
         return;
       }
       
-      console.log('Navigating to:', url);
+      console.log('🔍 Navigating:', url);
       socket.emit('navigate', { url });
     }
     
-    // Browser actions
     function browserAction(action) {
       if (!sessionReady || isNavigating) return;
       
-      console.log('Browser action:', action);
+      console.log('🔄 Action:', action);
       socket.emit('browser-action', { action });
     }
     
-    // Setup page interactions
     function setupPageInteractions() {
       try {
-        // Intercept all links using event delegation
         browserContent.addEventListener('click', handleClick, true);
         
-        // Intercept forms
         const forms = browserContent.querySelectorAll('form');
         forms.forEach(form => {
           form.addEventListener('submit', handleFormSubmit);
         });
         
-        // Make inputs work
         const inputs = browserContent.querySelectorAll('input:not([type="submit"]):not([type="button"]), textarea');
         inputs.forEach(input => {
           input.addEventListener('input', handleInput);
         });
         
       } catch (error) {
-        console.error('Error setting up interactions:', error);
+        console.error('❌ Setup error:', error);
       }
     }
     
-    // Handle clicks with event delegation
     function handleClick(e) {
-      // Find closest link
       let target = e.target;
       while (target && target !== browserContent) {
         if (target.tagName === 'A') {
@@ -704,14 +658,13 @@
               const absoluteUrl = new URL(href, currentUrl).href;
               navigate(absoluteUrl);
             } catch (error) {
-              console.error('Invalid URL:', href);
+              console.error('❌ Invalid URL:', href);
             }
           }
           return false;
         }
         
-        // Handle buttons
-        if (target.tagName === 'BUTTON' || target.tagName === 'INPUT' && target.type === 'submit') {
+        if (target.tagName === 'BUTTON' || (target.tagName === 'INPUT' && target.type === 'submit')) {
           e.preventDefault();
           e.stopPropagation();
           
@@ -724,7 +677,6 @@
       }
     }
     
-    // Handle form submission
     function handleFormSubmit(e) {
       e.preventDefault();
       
@@ -740,14 +692,12 @@
       }
     }
     
-    // Handle input changes
     function handleInput(e) {
       const input = e.target;
       const selector = getUniqueSelector(input);
       socket.emit('input', { selector, value: input.value });
     }
     
-    // Generate unique CSS selector
     function getUniqueSelector(el) {
       if (!el || !el.tagName) return '';
       
@@ -758,7 +708,6 @@
         if (classes) return el.tagName.toLowerCase() + '.' + classes;
       }
       
-      // Use nth-child
       if (el.parentElement) {
         const siblings = Array.from(el.parentElement.children);
         const index = siblings.indexOf(el) + 1;
@@ -768,14 +717,12 @@
       return el.tagName.toLowerCase();
     }
     
-    // Send keep-alive ping
     function sendPing() {
       if (socket.connected && sessionReady) {
         socket.emit('ping');
       }
     }
     
-    // Show toast message
     function showToast(message, type = 'info') {
       statusToast.textContent = message;
       statusToast.className = 'status-toast show ' + type;
@@ -785,7 +732,6 @@
       }, 3000);
     }
     
-    // Show error screen
     function showError(message) {
       browserContent.innerHTML = `
         <div class="error-screen">
@@ -797,23 +743,20 @@
       `;
     }
     
-    // Update welcome status
     function updateWelcomeStatus(text) {
       if (welcomeStatus) {
         welcomeStatus.textContent = text;
       }
     }
     
-    // Handle errors
     window.addEventListener('error', (e) => {
-      console.error('Client error:', e.error);
+      console.error('❌ Client error:', e.error);
     });
     
     window.addEventListener('unhandledrejection', (e) => {
-      console.error('Unhandled rejection:', e.reason);
+      console.error('❌ Unhandled rejection:', e.reason);
     });
     
-    // Initialize on load
     init();
   </script>
 </body>

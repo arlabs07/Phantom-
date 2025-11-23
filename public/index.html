@@ -1,1 +1,820 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Phantom - Cloud VPN Browser</title><script src="https://cdn.tailwindcss.com"></script><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Inter',system-ui,sans-serif;background:#000;color:#fff;overflow:hidden;user-select:none}::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:#1a1a1a}::-webkit-scrollbar-thumb{background:#8b5cf6;border-radius:4px}::-webkit-scrollbar-thumb:hover{background:#7c3aed}.gradient-border{position:relative;background:#000;border:2px solid transparent;background-clip:padding-box}.gradient-border::before{content:'';position:absolute;inset:-2px;background:linear-gradient(45deg,#8b5cf6,#a78bfa,#8b5cf6);border-radius:inherit;z-index:-1;opacity:.5;animation:rotate 3s linear infinite}@keyframes rotate{0%{filter:hue-rotate(0deg)}100%{filter:hue-rotate(360deg)}}.tab{transition:all .3s cubic-bezier(.4,0,.2,1)}.tab:hover{transform:translateY(-2px)}.tab.active{background:linear-gradient(135deg,#8b5cf6 0%,#7c3aed 100%)}.loading-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:1000}.spinner{border:4px solid #2a2a2a;border-top:4px solid #8b5cf6;border-radius:50%;width:50px;height:50px;animation:spin 1s linear infinite}@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}.browser-view{width:100%;height:100%;object-fit:contain;background:#fff;cursor:pointer}.status-dot{width:8px;height:8px;border-radius:50%;animation:pulse 2s ease-in-out infinite}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}@media(max-width:768px){.desktop-only{display:none!important}.mobile-icon{display:inline-block!important}}</style></head><body><div class="flex flex-col h-screen"><div class="bg-black border-b border-gray-800 p-3"><div class="flex items-center gap-3"><div class="flex items-center gap-2 text-purple-500"><i class="fas fa-shield-alt text-2xl"></i><h1 class="text-xl font-bold hidden md:inline">Phantom</h1></div><div class="flex-1 flex items-center gap-2 bg-gray-900 rounded-lg px-4 py-2 gradient-border"><button onclick="goBack()" class="text-gray-400 hover:text-white transition"><i class="fas fa-arrow-left"></i></button><button onclick="goForward()" class="text-gray-400 hover:text-white transition mr-2"><i class="fas fa-arrow-right"></i></button><button onclick="reloadPage()" class="text-gray-400 hover:text-white transition mr-2"><i class="fas fa-sync-alt" id="reloadIcon"></i></button><div class="flex items-center gap-2"><i class="fas fa-lock text-purple-500"></i><div class="status-dot bg-green-500" title="Connected via cloud proxy"></div></div><input type="text" id="urlInput" placeholder="Enter URL or search..." class="flex-1 bg-transparent outline-none text-white placeholder-gray-500 ml-2" onkeypress="handleEnter(event)"><button onclick="navigate()" class="text-purple-500 hover:text-purple-400 transition ml-2"><i class="fas fa-arrow-right"></i></button></div><button onclick="openNewTab()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition hidden md:block"><i class="fas fa-plus mr-2"></i><span class="desktop-only">New</span></button><button onclick="toggleAI()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition"><i class="fas fa-robot"></i></button></div></div><div class="bg-gray-900 border-b border-gray-800 px-3 py-2 overflow-x-auto flex gap-2" id="tabsContainer"></div><div class="flex-1 relative overflow-hidden bg-white"><div id="loadingOverlay" class="loading-overlay hidden"><div class="text-center"><div class="spinner mx-auto mb-4"></div><p class="text-gray-400">Loading via cloud...</p></div></div><img id="browserView" class="browser-view" alt="Browser content"><div id="aiPanel" class="absolute top-0 right-0 w-full md:w-96 h-full bg-gray-900 border-l border-gray-800 transform translate-x-full transition-transform duration-300 z-50"><div class="flex flex-col h-full"><div class="p-4 border-b border-gray-800 flex justify-between items-center"><h2 class="text-lg font-bold text-purple-500"><i class="fas fa-robot mr-2"></i>AI Assistant</h2><button onclick="toggleAI()" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button></div><div id="aiChat" class="flex-1 overflow-y-auto p-4 space-y-3"></div><div class="p-4 border-t border-gray-800"><div class="flex gap-2"><input type="text" id="aiInput" placeholder="Ask AI anything..." class="flex-1 bg-gray-800 rounded-lg px-4 py-2 outline-none text-white" onkeypress="handleAIEnter(event)"><button onclick="sendAIMessage()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition"><i class="fas fa-paper-plane"></i></button></div></div></div></div></div></div><script>const SESSION_ID=Date.now().toString();let tabs=[{id:Date.now(),url:'https://www.google.com',title:'New Tab',active:true}];let currentTabId=tabs[0].id;let isLoading=false;function showLoading(){document.getElementById('loadingOverlay').classList.remove('hidden');document.getElementById('reloadIcon').classList.add('fa-spin')}function hideLoading(){document.getElementById('loadingOverlay').classList.add('hidden');document.getElementById('reloadIcon').classList.remove('fa-spin')}function renderTabs(){const container=document.getElementById('tabsContainer');container.innerHTML=tabs.map(tab=>`<div class="tab flex items-center gap-2 px-4 py-2 rounded-lg cursor-pointer min-w-max ${tab.active?'active bg-purple-600':'bg-gray-800 hover:bg-gray-700'}" onclick="switchTab(${tab.id})"><i class="fas fa-globe mobile-icon hidden md:inline"></i><span class="desktop-only max-w-[150px] truncate">${tab.title}</span><button onclick="closeTab(${tab.id},event)" class="ml-2 text-gray-400 hover:text-white"><i class="fas fa-times text-xs"></i></button></div>`).join('');updateCurrentTab()}function openNewTab(){const newTab={id:Date.now(),url:'https://www.google.com',title:'New Tab',active:false};tabs.push(newTab);renderTabs()}function switchTab(tabId){tabs=tabs.map(t=>({...t,active:t.id===tabId}));currentTabId=tabId;renderTabs()}async function closeTab(tabId,event){event?.stopPropagation();if(tabs.length===1)return;try{await fetch('/api/close-tab',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId:SESSION_ID,tabId})})}catch(e){console.error('Close tab error:',e)}tabs=tabs.filter(t=>t.id!==tabId);if(currentTabId===tabId){tabs[0].active=true;currentTabId=tabs[0].id}renderTabs()}function updateCurrentTab(){const tab=tabs.find(t=>t.id===currentTabId);if(tab){document.getElementById('urlInput').value=tab.url}}async function loadURL(url){if(!url||isLoading)return;isLoading=true;showLoading();if(!url.match(/^https?:\/\//)){url=url.includes('.')?url:'search:'+url}try{const response=await fetch('/api/navigate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,sessionId:SESSION_ID,tabId:currentTabId})});const data=await response.json();if(data.success){document.getElementById('browserView').src='data:image/jpeg;base64,'+data.screenshot;const tab=tabs.find(t=>t.id===currentTabId);if(tab){tab.url=data.url;tab.title=data.title||'Untitled'}renderTabs()}else{throw new Error(data.error)}}catch(error){console.error('Load error:',error);alert('Failed to load page: '+error.message)}finally{hideLoading();isLoading=false}}function navigate(){const url=document.getElementById('urlInput').value;loadURL(url)}function handleEnter(e){if(e.key==='Enter')navigate()}async function reloadPage(){const tab=tabs.find(t=>t.id===currentTabId);if(tab)await loadURL(tab.url)}async function goBack(){await performAction('back')}async function goForward(){await performAction('forward')}async function performAction(action,data={}){if(isLoading)return;showLoading();try{const response=await fetch('/api/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,sessionId:SESSION_ID,tabId:currentTabId,data})});const result=await response.json();if(result.success&&result.screenshot){document.getElementById('browserView').src='data:image/jpeg;base64,'+result.screenshot;const tab=tabs.find(t=>t.id===currentTabId);if(tab){tab.url=result.url;tab.title=result.title}renderTabs()}}catch(error){console.error('Action error:',error)}finally{hideLoading()}}function toggleAI(){document.getElementById('aiPanel').classList.toggle('translate-x-full')}async function sendAIMessage(){const input=document.getElementById('aiInput');const message=input.value.trim();if(!message)return;appendAIMessage(message,'user');input.value='';try{const response=await fetch(`https://text.pollinations.ai/${encodeURIComponent(message)}?system=${encodeURIComponent('You are a helpful AI assistant for a VPN browser. Provide concise and accurate answers.')}&model=gemini-search`);const answer=await response.text();appendAIMessage(answer,'ai')}catch(error){appendAIMessage('Sorry, I encountered an error. Please try again.','ai')}}function appendAIMessage(text,sender){const chat=document.getElementById('aiChat');const div=document.createElement('div');div.className=`p-3 rounded-lg ${sender==='user'?'bg-purple-600 ml-8':'bg-gray-800 mr-8'}`;div.innerHTML=`<div class="flex items-start gap-2"><i class="fas ${sender==='user'?'fa-user':'fa-robot'} mt-1"></i><p class="flex-1 text-sm">${text}</p></div>`;chat.appendChild(div);chat.scrollTop=chat.scrollHeight}function handleAIEnter(e){if(e.key==='Enter')sendAIMessage()}document.getElementById('browserView').addEventListener('click',()=>{console.log('Interactive browsing coming soon')});window.onload=()=>{renderTabs();loadURL('https://www.google.com')};</script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Cloud VPN Browser</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    :root {
+      --primary-color: #1a73e8;
+      --bg-color: #fff;
+      --text-color: #202124;
+      --border-color: #e0e0e0;
+      --hover-color: #f1f3f4;
+      --error-color: #d93025;
+      --success-color: #1e8e3e;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #202124;
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+      position: fixed;
+      touch-action: manipulation;
+    }
+
+    .browser-container {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background: var(--bg-color);
+    }
+
+    /* Top Bar - Chrome Mobile Style */
+    .top-bar {
+      background: var(--bg-color);
+      padding: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid var(--border-color);
+      min-height: 56px;
+      z-index: 1000;
+      flex-shrink: 0;
+    }
+
+    .nav-buttons {
+      display: flex;
+      gap: 4px;
+    }
+
+    .nav-btn {
+      width: 40px;
+      height: 40px;
+      border: none;
+      background: transparent;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 20px;
+      color: #5f6368;
+      transition: background 0.2s;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .nav-btn:active:not(:disabled) {
+      background: var(--hover-color);
+    }
+
+    .nav-btn:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    /* URL Bar */
+    .url-container {
+      flex: 1;
+      background: var(--hover-color);
+      border-radius: 24px;
+      padding: 0 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 40px;
+      position: relative;
+    }
+
+    .lock-icon {
+      color: #5f6368;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .lock-icon.secure {
+      color: var(--success-color);
+    }
+
+    #url-input {
+      flex: 1;
+      border: none;
+      background: transparent;
+      font-size: 14px;
+      color: var(--text-color);
+      outline: none;
+      min-width: 0;
+    }
+
+    #url-input::placeholder {
+      color: #80868b;
+    }
+
+    .go-btn {
+      background: transparent;
+      border: none;
+      color: var(--primary-color);
+      font-weight: 500;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 14px;
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    .go-btn:active {
+      background: #e8f0fe;
+    }
+
+    .menu-btn {
+      width: 40px;
+      height: 40px;
+      border: none;
+      background: transparent;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 24px;
+      color: #5f6368;
+      flex-shrink: 0;
+    }
+
+    /* Content Area */
+    .content-wrapper {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+      background: var(--bg-color);
+      min-height: 0;
+    }
+
+    #browser-content {
+      width: 100%;
+      height: 100%;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      position: relative;
+      overscroll-behavior: contain;
+    }
+
+    #browser-content.rendered {
+      padding: 0;
+    }
+
+    /* Style injected content */
+    #browser-content a {
+      color: var(--primary-color);
+      text-decoration: none;
+    }
+
+    #browser-content img {
+      max-width: 100%;
+      height: auto;
+    }
+
+    #browser-content input,
+    #browser-content textarea,
+    #browser-content select {
+      font-size: 16px !important; /* Prevent zoom on iOS */
+    }
+
+    /* Loading Bar */
+    .loading-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: var(--primary-color);
+      transform: scaleX(0);
+      transform-origin: left;
+      z-index: 1001;
+      transition: transform 0.3s ease;
+    }
+
+    .loading-bar.active {
+      animation: loading 1.5s ease-in-out infinite;
+    }
+
+    @keyframes loading {
+      0% { transform: scaleX(0); }
+      50% { transform: scaleX(0.7); }
+      100% { transform: scaleX(1); }
+    }
+
+    /* Status Toast */
+    .status-toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: rgba(0, 0, 0, 0.87);
+      color: white;
+      padding: 12px 24px;
+      border-radius: 24px;
+      font-size: 14px;
+      z-index: 2000;
+      opacity: 0;
+      transition: all 0.3s ease;
+      max-width: 90%;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .status-toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .status-toast.error {
+      background: var(--error-color);
+    }
+
+    .status-toast.success {
+      background: var(--success-color);
+    }
+
+    /* Welcome Screen */
+    .welcome-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      padding: 32px;
+      text-align: center;
+    }
+
+    .chrome-logo {
+      width: 80px;
+      height: 80px;
+      margin-bottom: 24px;
+      background: linear-gradient(135deg, #4285f4, #34a853, #fbbc04, #ea4335);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 40px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+
+    .welcome-screen h1 {
+      font-size: 24px;
+      color: var(--text-color);
+      margin-bottom: 12px;
+      font-weight: 500;
+    }
+
+    .welcome-screen p {
+      color: #5f6368;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .welcome-screen .status {
+      margin-top: 16px;
+      color: var(--primary-color);
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    /* Error Screen */
+    .error-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      padding: 32px;
+      text-align: center;
+    }
+
+    .error-screen .icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+
+    .error-screen h2 {
+      color: var(--error-color);
+      margin-bottom: 12px;
+      font-size: 20px;
+      font-weight: 500;
+    }
+
+    .error-screen p {
+      color: #5f6368;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .retry-btn {
+      margin-top: 20px;
+      padding: 10px 24px;
+      background: var(--primary-color);
+      color: white;
+      border: none;
+      border-radius: 24px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .retry-btn:active {
+      opacity: 0.8;
+    }
+
+    /* Connection Status Indicator */
+    .connection-status {
+      position: fixed;
+      top: 60px;
+      right: 10px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--success-color);
+      z-index: 999;
+      transition: background 0.3s;
+    }
+
+    .connection-status.disconnected {
+      background: var(--error-color);
+      animation: blink 1s ease-in-out infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+      .url-container {
+        padding: 0 12px;
+      }
+
+      #url-input {
+        font-size: 16px;
+      }
+    }
+
+    /* Prevent text selection during interactions */
+    .no-select {
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="browser-container">
+    <div class="loading-bar" id="loading-bar"></div>
+    <div class="connection-status" id="connection-status"></div>
+    
+    <div class="top-bar no-select">
+      <div class="nav-buttons">
+        <button class="nav-btn" id="back-btn" disabled title="Back">←</button>
+        <button class="nav-btn" id="forward-btn" disabled title="Forward">→</button>
+        <button class="nav-btn" id="refresh-btn" disabled title="Refresh">↻</button>
+      </div>
+      
+      <div class="url-container">
+        <span class="lock-icon" id="lock-icon">🔒</span>
+        <input 
+          type="text" 
+          id="url-input" 
+          placeholder="Search or type web address"
+          autocomplete="off"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+        >
+        <button class="go-btn" id="go-btn">Go</button>
+      </div>
+      
+      <button class="menu-btn" id="menu-btn" title="Menu">⋮</button>
+    </div>
+    
+    <div class="content-wrapper">
+      <div id="browser-content">
+        <div class="welcome-screen">
+          <div class="chrome-logo">🌐</div>
+          <h1>Cloud VPN Browser</h1>
+          <p>Browse anonymously using cloud server IP<br>Your real IP address is protected</p>
+          <div class="status" id="welcome-status">Initializing...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="status-toast" id="status-toast"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    // Configuration
+    const CONFIG = {
+      RECONNECT_ATTEMPTS: 5,
+      RECONNECT_DELAY: 2000,
+      PING_INTERVAL: 30000,
+      MAX_URL_LENGTH: 2048
+    };
+
+    // Socket.IO connection with reconnection strategy
+    const socket = io({
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: CONFIG.RECONNECT_ATTEMPTS,
+      reconnectionDelay: CONFIG.RECONNECT_DELAY,
+      reconnectionDelayMax: 10000,
+      timeout: 20000,
+      autoConnect: true
+    });
+    
+    // DOM Elements
+    const urlInput = document.getElementById('url-input');
+    const goBtn = document.getElementById('go-btn');
+    const backBtn = document.getElementById('back-btn');
+    const forwardBtn = document.getElementById('forward-btn');
+    const refreshBtn = document.getElementById('refresh-btn');
+    const browserContent = document.getElementById('browser-content');
+    const loadingBar = document.getElementById('loading-bar');
+    const statusToast = document.getElementById('status-toast');
+    const lockIcon = document.getElementById('lock-icon');
+    const connectionStatus = document.getElementById('connection-status');
+    const welcomeStatus = document.getElementById('welcome-status');
+    
+    // State
+    let sessionReady = false;
+    let currentUrl = '';
+    let isNavigating = false;
+    let pingInterval = null;
+    let reconnectAttempts = 0;
+    
+    // Initialize
+    function init() {
+      console.log('Initializing browser...');
+      setupEventListeners();
+      updateWelcomeStatus('Connecting to server...');
+    }
+    
+    // Setup event listeners
+    function setupEventListeners() {
+      // Navigation controls
+      goBtn.addEventListener('click', () => navigate());
+      urlInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') navigate();
+      });
+      
+      urlInput.addEventListener('focus', function() {
+        this.select();
+      });
+      
+      backBtn.addEventListener('click', () => browserAction('back'));
+      forwardBtn.addEventListener('click', () => browserAction('forward'));
+      refreshBtn.addEventListener('click', () => browserAction('refresh'));
+      
+      // Prevent zoom on double tap
+      let lastTouchEnd = 0;
+      document.addEventListener('touchend', (e) => {
+        const now = Date.now();
+        if (now - lastTouchEnd <= 300) {
+          e.preventDefault();
+        }
+        lastTouchEnd = now;
+      }, false);
+      
+      // Handle visibility change
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && socket.connected && sessionReady) {
+          sendPing();
+        }
+      });
+    }
+    
+    // Socket event handlers
+    socket.on('connect', () => {
+      console.log('Connected to server');
+      connectionStatus.classList.remove('disconnected');
+      reconnectAttempts = 0;
+      
+      updateWelcomeStatus('Initializing browser session...');
+      socket.emit('init');
+      
+      // Start ping interval
+      if (pingInterval) clearInterval(pingInterval);
+      pingInterval = setInterval(sendPing, CONFIG.PING_INTERVAL);
+    });
+    
+    socket.on('ready', () => {
+      sessionReady = true;
+      console.log('Session ready');
+      updateWelcomeStatus('Ready to browse!');
+      showToast('Browser ready', 'success');
+      
+      // Enable controls
+      refreshBtn.disabled = false;
+      backBtn.disabled = false;
+      forwardBtn.disabled = false;
+    });
+    
+    socket.on('loading', ({ status }) => {
+      if (status) {
+        loadingBar.classList.add('active');
+        isNavigating = true;
+      } else {
+        loadingBar.classList.remove('active');
+        isNavigating = false;
+      }
+    });
+    
+    socket.on('page-content', ({ html, url, title }) => {
+      try {
+        // Update URL bar
+        currentUrl = url;
+        urlInput.value = url;
+        document.title = title || 'Cloud VPN Browser';
+        
+        // Update lock icon
+        const isSecure = url.startsWith('https://');
+        lockIcon.textContent = isSecure ? '🔒' : '🔓';
+        lockIcon.classList.toggle('secure', isSecure);
+        
+        // Render content
+        browserContent.innerHTML = html;
+        browserContent.classList.add('rendered');
+        
+        // Setup interaction handlers
+        setupPageInteractions();
+        
+        // Enable navigation buttons
+        backBtn.disabled = false;
+        forwardBtn.disabled = false;
+        refreshBtn.disabled = false;
+        
+      } catch (error) {
+        console.error('Error rendering page:', error);
+        showError('Failed to render page');
+      }
+    });
+    
+    socket.on('navigation', ({ url, title }) => {
+      urlInput.value = url;
+      document.title = title || 'Cloud VPN Browser';
+      currentUrl = url;
+    });
+    
+    socket.on('error', ({ message, code }) => {
+      console.error('Server error:', code, message);
+      showToast(message, 'error');
+      
+      if (code === 'NO_SESSION' || code === 'INIT_ERROR') {
+        sessionReady = false;
+        showError(message);
+      }
+    });
+    
+    socket.on('pong', () => {
+      // Keep alive response
+    });
+    
+    socket.on('disconnect', (reason) => {
+      console.warn('Disconnected:', reason);
+      sessionReady = false;
+      connectionStatus.classList.add('disconnected');
+      
+      if (pingInterval) {
+        clearInterval(pingInterval);
+        pingInterval = null;
+      }
+      
+      if (reason === 'io server disconnect') {
+        // Server disconnected us, try to reconnect
+        socket.connect();
+      }
+      
+      showToast('Connection lost. Reconnecting...', 'error');
+    });
+    
+    socket.on('reconnect_attempt', (attemptNumber) => {
+      reconnectAttempts = attemptNumber;
+      console.log(`Reconnection attempt ${attemptNumber}`);
+      updateWelcomeStatus(`Reconnecting... (${attemptNumber}/${CONFIG.RECONNECT_ATTEMPTS})`);
+    });
+    
+    socket.on('reconnect', (attemptNumber) => {
+      console.log('Reconnected successfully');
+      showToast('Reconnected!', 'success');
+    });
+    
+    socket.on('reconnect_failed', () => {
+      console.error('Reconnection failed');
+      showError('Unable to connect to server. Please refresh the page.');
+    });
+    
+    // Navigate to URL
+    function navigate(url) {
+      if (!sessionReady) {
+        showToast('Please wait for browser to initialize', 'error');
+        return;
+      }
+      
+      if (isNavigating) {
+        showToast('Please wait for current page to load', 'error');
+        return;
+      }
+      
+      if (!url) url = urlInput.value.trim();
+      if (!url) return;
+      
+      // Validate URL length
+      if (url.length > CONFIG.MAX_URL_LENGTH) {
+        showToast('URL too long', 'error');
+        return;
+      }
+      
+      console.log('Navigating to:', url);
+      socket.emit('navigate', { url });
+    }
+    
+    // Browser actions
+    function browserAction(action) {
+      if (!sessionReady || isNavigating) return;
+      
+      console.log('Browser action:', action);
+      socket.emit('browser-action', { action });
+    }
+    
+    // Setup page interactions
+    function setupPageInteractions() {
+      try {
+        // Intercept all links using event delegation
+        browserContent.addEventListener('click', handleClick, true);
+        
+        // Intercept forms
+        const forms = browserContent.querySelectorAll('form');
+        forms.forEach(form => {
+          form.addEventListener('submit', handleFormSubmit);
+        });
+        
+        // Make inputs work
+        const inputs = browserContent.querySelectorAll('input:not([type="submit"]):not([type="button"]), textarea');
+        inputs.forEach(input => {
+          input.addEventListener('input', handleInput);
+        });
+        
+      } catch (error) {
+        console.error('Error setting up interactions:', error);
+      }
+    }
+    
+    // Handle clicks with event delegation
+    function handleClick(e) {
+      // Find closest link
+      let target = e.target;
+      while (target && target !== browserContent) {
+        if (target.tagName === 'A') {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const href = target.getAttribute('href');
+          if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
+            try {
+              const absoluteUrl = new URL(href, currentUrl).href;
+              navigate(absoluteUrl);
+            } catch (error) {
+              console.error('Invalid URL:', href);
+            }
+          }
+          return false;
+        }
+        
+        // Handle buttons
+        if (target.tagName === 'BUTTON' || target.tagName === 'INPUT' && target.type === 'submit') {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          const selector = getUniqueSelector(target);
+          socket.emit('click', { selector });
+          return false;
+        }
+        
+        target = target.parentElement;
+      }
+    }
+    
+    // Handle form submission
+    function handleFormSubmit(e) {
+      e.preventDefault();
+      
+      const form = e.target;
+      const formData = new FormData(form);
+      const action = form.getAttribute('action') || currentUrl;
+      const method = (form.getAttribute('method') || 'get').toLowerCase();
+      
+      if (method === 'get') {
+        const params = new URLSearchParams(formData);
+        const url = action + (action.includes('?') ? '&' : '?') + params.toString();
+        navigate(url);
+      }
+    }
+    
+    // Handle input changes
+    function handleInput(e) {
+      const input = e.target;
+      const selector = getUniqueSelector(input);
+      socket.emit('input', { selector, value: input.value });
+    }
+    
+    // Generate unique CSS selector
+    function getUniqueSelector(el) {
+      if (!el || !el.tagName) return '';
+      
+      if (el.id) return '#' + el.id;
+      
+      if (el.className && typeof el.className === 'string') {
+        const classes = el.className.split(' ').filter(c => c && !c.includes(' ')).join('.');
+        if (classes) return el.tagName.toLowerCase() + '.' + classes;
+      }
+      
+      // Use nth-child
+      if (el.parentElement) {
+        const siblings = Array.from(el.parentElement.children);
+        const index = siblings.indexOf(el) + 1;
+        return el.tagName.toLowerCase() + `:nth-child(${index})`;
+      }
+      
+      return el.tagName.toLowerCase();
+    }
+    
+    // Send keep-alive ping
+    function sendPing() {
+      if (socket.connected && sessionReady) {
+        socket.emit('ping');
+      }
+    }
+    
+    // Show toast message
+    function showToast(message, type = 'info') {
+      statusToast.textContent = message;
+      statusToast.className = 'status-toast show ' + type;
+      
+      setTimeout(() => {
+        statusToast.classList.remove('show');
+      }, 3000);
+    }
+    
+    // Show error screen
+    function showError(message) {
+      browserContent.innerHTML = `
+        <div class="error-screen">
+          <div class="icon">⚠️</div>
+          <h2>Connection Error</h2>
+          <p>${message}</p>
+          <button class="retry-btn" onclick="location.reload()">Reload Page</button>
+        </div>
+      `;
+    }
+    
+    // Update welcome status
+    function updateWelcomeStatus(text) {
+      if (welcomeStatus) {
+        welcomeStatus.textContent = text;
+      }
+    }
+    
+    // Handle errors
+    window.addEventListener('error', (e) => {
+      console.error('Client error:', e.error);
+    });
+    
+    window.addEventListener('unhandledrejection', (e) => {
+      console.error('Unhandled rejection:', e.reason);
+    });
+    
+    // Initialize on load
+    init();
+  </script>
+</body>
+</html>

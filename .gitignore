@@ -6,3 +6,5 @@ node_modules/
 dist/
 build/
 .puppeteer/
+package-lock.json
+yarn.lock

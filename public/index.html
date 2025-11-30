@@ -1,763 +1,340 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Cloud VPN Browser</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    :root {
-      --primary-color: #1a73e8;
-      --bg-color: #fff;
-      --text-color: #202124;
-      --border-color: #e0e0e0;
-      --hover-color: #f1f3f4;
-      --error-color: #d93025;
-      --success-color: #1e8e3e;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      background: #202124;
-      overflow: hidden;
-      height: 100vh;
-      width: 100vw;
-      position: fixed;
-      touch-action: manipulation;
-    }
-
-    .browser-container {
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      background: var(--bg-color);
-    }
-
-    .top-bar {
-      background: var(--bg-color);
-      padding: 8px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      border-bottom: 1px solid var(--border-color);
-      min-height: 56px;
-      z-index: 1000;
-      flex-shrink: 0;
-    }
-
-    .nav-buttons {
-      display: flex;
-      gap: 4px;
-    }
-
-    .nav-btn {
-      width: 40px;
-      height: 40px;
-      border: none;
-      background: transparent;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      font-size: 20px;
-      color: #5f6368;
-      transition: background 0.2s;
-      user-select: none;
-    }
-
-    .nav-btn:active:not(:disabled) {
-      background: var(--hover-color);
-    }
-
-    .nav-btn:disabled {
-      opacity: 0.3;
-      cursor: not-allowed;
-    }
-
-    .url-container {
-      flex: 1;
-      background: var(--hover-color);
-      border-radius: 24px;
-      padding: 0 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      min-height: 40px;
-    }
-
-    .lock-icon {
-      color: #5f6368;
-      font-size: 16px;
-      flex-shrink: 0;
-    }
-
-    .lock-icon.secure {
-      color: var(--success-color);
-    }
-
-    #url-input {
-      flex: 1;
-      border: none;
-      background: transparent;
-      font-size: 14px;
-      color: var(--text-color);
-      outline: none;
-      min-width: 0;
-    }
-
-    #url-input::placeholder {
-      color: #80868b;
-    }
-
-    .go-btn {
-      background: transparent;
-      border: none;
-      color: var(--primary-color);
-      font-weight: 500;
-      cursor: pointer;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 14px;
-      flex-shrink: 0;
-      user-select: none;
-    }
-
-    .go-btn:active {
-      background: #e8f0fe;
-    }
-
-    .menu-btn {
-      width: 40px;
-      height: 40px;
-      border: none;
-      background: transparent;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      font-size: 24px;
-      color: #5f6368;
-      flex-shrink: 0;
-    }
-
-    .content-wrapper {
-      flex: 1;
-      overflow: hidden;
-      position: relative;
-      background: var(--bg-color);
-      min-height: 0;
-    }
-
-    #browser-content {
-      width: 100%;
-      height: 100%;
-      overflow-y: auto;
-      overflow-x: hidden;
-      -webkit-overflow-scrolling: touch;
-      position: relative;
-      overscroll-behavior: contain;
-    }
-
-    #browser-content.rendered {
-      padding: 0;
-    }
-
-    #browser-content a {
-      color: var(--primary-color);
-      text-decoration: none;
-    }
-
-    #browser-content img {
-      max-width: 100%;
-      height: auto;
-    }
-
-    #browser-content input,
-    #browser-content textarea,
-    #browser-content select {
-      font-size: 16px !important;
-    }
-
-    .loading-bar {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 3px;
-      background: var(--primary-color);
-      transform: scaleX(0);
-      transform-origin: left;
-      z-index: 1001;
-      transition: transform 0.3s ease;
-    }
-
-    .loading-bar.active {
-      animation: loading 1.5s ease-in-out infinite;
-    }
-
-    @keyframes loading {
-      0% { transform: scaleX(0); }
-      50% { transform: scaleX(0.7); }
-      100% { transform: scaleX(1); }
-    }
-
-    .status-toast {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%) translateY(100px);
-      background: rgba(0, 0, 0, 0.87);
-      color: white;
-      padding: 12px 24px;
-      border-radius: 24px;
-      font-size: 14px;
-      z-index: 2000;
-      opacity: 0;
-      transition: all 0.3s ease;
-      max-width: 90%;
-      text-align: center;
-      pointer-events: none;
-    }
-
-    .status-toast.show {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
-
-    .status-toast.error {
-      background: var(--error-color);
-    }
-
-    .status-toast.success {
-      background: var(--success-color);
-    }
-
-    .welcome-screen {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      padding: 32px;
-      text-align: center;
-    }
-
-    .chrome-logo {
-      width: 80px;
-      height: 80px;
-      margin-bottom: 24px;
-      background: linear-gradient(135deg, #4285f4, #34a853, #fbbc04, #ea4335);
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 40px;
-      animation: pulse 2s ease-in-out infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.05); }
-    }
-
-    .welcome-screen h1 {
-      font-size: 24px;
-      color: var(--text-color);
-      margin-bottom: 12px;
-      font-weight: 500;
-    }
-
-    .welcome-screen p {
-      color: #5f6368;
-      font-size: 14px;
-      line-height: 1.5;
-    }
-
-    .welcome-screen .status {
-      margin-top: 16px;
-      color: var(--primary-color);
-      font-size: 13px;
-      font-weight: 500;
-    }
-
-    .error-screen {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      padding: 32px;
-      text-align: center;
-    }
-
-    .error-screen .icon {
-      font-size: 48px;
-      margin-bottom: 16px;
-    }
-
-    .error-screen h2 {
-      color: var(--error-color);
-      margin-bottom: 12px;
-      font-size: 20px;
-      font-weight: 500;
-    }
-
-    .error-screen p {
-      color: #5f6368;
-      font-size: 14px;
-      line-height: 1.5;
-    }
-
-    .retry-btn {
-      margin-top: 20px;
-      padding: 10px 24px;
-      background: var(--primary-color);
-      color: white;
-      border: none;
-      border-radius: 24px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-    }
-
-    .retry-btn:active {
-      opacity: 0.8;
-    }
-
-    .connection-status {
-      position: fixed;
-      top: 60px;
-      right: 10px;
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: var(--success-color);
-      z-index: 999;
-      transition: background 0.3s;
-    }
-
-    .connection-status.disconnected {
-      background: var(--error-color);
-      animation: blink 1s ease-in-out infinite;
-    }
-
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.3; }
-    }
-
-    @media (max-width: 768px) {
-      .url-container {
-        padding: 0 12px;
-      }
-
-      #url-input {
-        font-size: 16px;
-      }
-    }
-
-    .no-select {
-      -webkit-user-select: none;
-      -moz-user-select: none;
-      -ms-user-select: none;
-      user-select: none;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Render Host & AI Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Custom scrollbar for code editor */
+        textarea {
+            font-family: 'Courier New', Courier, monospace;
+            white-space: pre;
+            overflow-wrap: normal;
+            overflow-x: scroll;
+        }
+        .chat-msg { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
 </head>
-<body>
-  <div class="browser-container">
-    <div class="loading-bar" id="loading-bar"></div>
-    <div class="connection-status" id="connection-status"></div>
-    
-    <div class="top-bar no-select">
-      <div class="nav-buttons">
-        <button class="nav-btn" id="back-btn" disabled title="Back">←</button>
-        <button class="nav-btn" id="forward-btn" disabled title="Forward">→</button>
-        <button class="nav-btn" id="refresh-btn" disabled title="Refresh">↻</button>
-      </div>
-      
-      <div class="url-container">
-        <span class="lock-icon" id="lock-icon">🔒</span>
-        <input 
-          type="text" 
-          id="url-input" 
-          placeholder="Search or type web address"
-          autocomplete="off"
-          autocorrect="off"
-          autocapitalize="off"
-          spellcheck="false"
-        >
-        <button class="go-btn" id="go-btn">Go</button>
-      </div>
-      
-      <button class="menu-btn" id="menu-btn" title="Menu">⋮</button>
-    </div>
-    
-    <div class="content-wrapper">
-      <div id="browser-content">
-        <div class="welcome-screen">
-          <div class="chrome-logo">🌐</div>
-          <h1>Cloud VPN Browser</h1>
-          <p>Browse anonymously using cloud server IP<br>Your real IP address is protected</p>
-          <div class="status" id="welcome-status">Initializing...</div>
+<body class="bg-gray-900 text-white h-screen flex flex-col overflow-hidden">
+
+    <!-- DESKTOP HEADER -->
+    <header class="h-14 bg-gray-800 border-b border-gray-700 flex items-center justify-between px-4 shrink-0">
+        <div class="flex items-center gap-2">
+            <i class="fa-solid fa-server text-green-400"></i>
+            <h1 class="font-bold text-lg">RenderHost<span class="text-xs font-normal text-gray-400 ml-2">Project Alpha</span></h1>
         </div>
-      </div>
+        <div class="hidden md:flex gap-3">
+            <button onclick="deployCode()" class="bg-green-600 hover:bg-green-700 px-4 py-1.5 rounded text-sm font-medium transition">
+                <i class="fa-solid fa-cloud-arrow-up mr-2"></i>Deploy Real
+            </button>
+            <button onclick="requestScreenshot()" class="bg-blue-600 hover:bg-blue-700 px-4 py-1.5 rounded text-sm font-medium transition">
+                <i class="fa-solid fa-camera mr-2"></i>Screenshot
+            </button>
+        </div>
+        <!-- Mobile 3-dots Menu Button (visible only on mobile) -->
+        <button onclick="toggleMobileMenu()" class="md:hidden text-gray-300 hover:text-white">
+            <i class="fa-solid fa-ellipsis-vertical text-xl"></i>
+        </button>
+    </header>
+
+    <!-- MAIN CONTENT AREA (Split View on Desktop, Tab View on Mobile) -->
+    <main class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+
+        <!-- LEFT PANEL: ASSISTANT & CODE -->
+        <div id="assistant-panel" class="w-full md:w-1/2 flex flex-col border-r border-gray-700 bg-gray-900 h-full">
+            
+            <!-- Chat Area -->
+            <div id="chat-history" class="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-900">
+                <div class="chat-msg flex gap-3">
+                    <div class="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center shrink-0"><i class="fa-solid fa-robot"></i></div>
+                    <div class="bg-gray-800 p-3 rounded-lg rounded-tl-none max-w-[80%] text-sm text-gray-200">
+                        Hello! I am your AI Code Assistant (powered by Pollination). I can help you write code. Try asking "Create a landing page".
+                    </div>
+                </div>
+            </div>
+
+            <!-- Code Editor Tabs (Mini) -->
+            <div class="flex bg-gray-800 text-xs border-y border-gray-700">
+                <button onclick="switchEditor('html')" id="tab-html" class="px-4 py-2 bg-gray-700 text-blue-300 font-bold border-r border-gray-600">HTML</button>
+                <button onclick="switchEditor('css')" id="tab-css" class="px-4 py-2 hover:bg-gray-700 text-gray-400 border-r border-gray-600">CSS</button>
+                <button onclick="switchEditor('js')" id="tab-js" class="px-4 py-2 hover:bg-gray-700 text-gray-400">JS</button>
+            </div>
+
+            <!-- Editor Input -->
+            <div class="h-64 md:h-96 relative group">
+                <textarea id="code-html" class="w-full h-full bg-gray-950 p-4 text-sm text-blue-100 outline-none resize-none" placeholder="<!-- Write HTML here -->">
+<div class="container">
+    <h1>Hello World</h1>
+    <p>Deployed via Render Node Server</p>
+    <button id="clickMe">Click Me</button>
+</div></textarea>
+                <textarea id="code-css" class="w-full h-full bg-gray-950 p-4 text-sm text-pink-100 outline-none resize-none hidden" placeholder="/* Write CSS here */">
+body { background: #111; color: white; font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; }
+.container { text-align: center; }
+button { padding: 10px 20px; background: #3b82f6; border: none; color: white; border-radius: 5px; cursor: pointer; margin-top: 20px; }
+button:hover { background: #2563eb; }</textarea>
+                <textarea id="code-js" class="w-full h-full bg-gray-950 p-4 text-sm text-yellow-100 outline-none resize-none hidden" placeholder="// Write JS here">
+document.getElementById('clickMe').addEventListener('click', () => {
+    alert('Button Clicked!');
+    console.log('Button was clicked at ' + new Date().toLocaleTimeString());
+});</textarea>
+            </div>
+
+            <!-- Prompt Input -->
+            <div class="p-3 bg-gray-800 border-t border-gray-700 flex gap-2">
+                <input id="ai-prompt" type="text" placeholder="Ask AI to edit code..." class="flex-1 bg-gray-700 text-white px-3 py-2 rounded outline-none focus:ring-1 focus:ring-blue-500 text-sm">
+                <button onclick="askAI()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded transition">
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- RIGHT PANEL: PREVIEW -->
+        <div id="preview-panel" class="w-full md:w-1/2 bg-white h-full relative hidden md:block">
+            <div class="absolute top-0 left-0 w-full h-8 bg-gray-200 flex items-center px-2 justify-between border-b border-gray-300">
+                <span class="text-xs text-gray-500 flex items-center gap-1"><i class="fa-solid fa-lock"></i> /site/index.html</span>
+                <a href="/site/index.html" target="_blank" class="text-xs text-blue-600 hover:underline">Open in New Tab <i class="fa-solid fa-external-link-alt"></i></a>
+            </div>
+            <iframe id="preview-frame" class="w-full h-full pt-8" sandbox="allow-scripts allow-same-origin allow-modals"></iframe>
+            
+            <!-- Console Logs Overlay -->
+            <div id="console-logs" class="absolute bottom-0 left-0 w-full max-h-40 bg-black/80 text-green-400 font-mono text-xs p-2 overflow-y-auto backdrop-blur-sm hidden">
+                <div class="sticky top-0 bg-black/90 w-full flex justify-between border-b border-gray-700 mb-1 pb-1">
+                    <span>Console Output</span>
+                    <button onclick="document.getElementById('console-logs').classList.add('hidden')" class="text-red-400 hover:text-white"><i class="fa-solid fa-times"></i></button>
+                </div>
+                <div id="log-content"></div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- MOBILE BOTTOM NAVIGATION -->
+    <nav class="md:hidden h-16 bg-gray-800 border-t border-gray-700 flex justify-around items-center shrink-0 z-20">
+        <button onclick="switchTab('assistant')" class="flex flex-col items-center text-blue-400 active-tab-btn">
+            <i class="fa-solid fa-code text-lg mb-1"></i>
+            <span class="text-xs">Code</span>
+        </button>
+        <button onclick="switchTab('preview')" class="flex flex-col items-center text-gray-400">
+            <i class="fa-solid fa-eye text-lg mb-1"></i>
+            <span class="text-xs">Preview</span>
+        </button>
+        <button onclick="toggleMobileMenu()" class="flex flex-col items-center text-gray-400">
+            <i class="fa-solid fa-ellipsis text-lg mb-1"></i>
+            <span class="text-xs">More</span>
+        </button>
+    </nav>
+
+    <!-- MOBILE MENU OVERLAY (3 DOTS) -->
+    <div id="mobile-menu" class="fixed bottom-16 right-0 w-full bg-gray-800 border-t border-gray-700 transform translate-y-full transition-transform duration-200 z-10 md:hidden">
+        <div class="p-4 grid grid-cols-2 gap-3">
+            <button onclick="deployCode()" class="bg-green-600 p-3 rounded text-white flex items-center justify-center gap-2">
+                <i class="fa-solid fa-rocket"></i> Deploy
+            </button>
+            <button onclick="requestScreenshot()" class="bg-blue-600 p-3 rounded text-white flex items-center justify-center gap-2">
+                <i class="fa-solid fa-camera"></i> Screenshot
+            </button>
+            <button onclick="location.reload()" class="bg-gray-700 p-3 rounded text-white flex items-center justify-center gap-2">
+                <i class="fa-solid fa-rotate-right"></i> Reload
+            </button>
+            <a href="/site/index.html" target="_blank" class="bg-gray-700 p-3 rounded text-white flex items-center justify-center gap-2">
+                <i class="fa-solid fa-external-link-alt"></i> Open Site
+            </a>
+        </div>
     </div>
-  </div>
-  
-  <div class="status-toast" id="status-toast"></div>
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script>
-    const CONFIG = {
-      RECONNECT_ATTEMPTS: 5,
-      RECONNECT_DELAY: 2000,
-      PING_INTERVAL: 30000,
-      MAX_URL_LENGTH: 2048
-    };
+    <script>
+        // --- STATE MANAGEMENT ---
+        let currentTab = 'assistant'; // 'assistant' or 'preview'
+        const iframe = document.getElementById('preview-frame');
+        
+        // --- UI FUNCTIONS ---
 
-    const socket = io({
-      transports: ['websocket', 'polling'],
-      reconnectionAttempts: CONFIG.RECONNECT_ATTEMPTS,
-      reconnectionDelay: CONFIG.RECONNECT_DELAY,
-      reconnectionDelayMax: 10000,
-      timeout: 20000,
-      autoConnect: true
-    });
-    
-    const urlInput = document.getElementById('url-input');
-    const goBtn = document.getElementById('go-btn');
-    const backBtn = document.getElementById('back-btn');
-    const forwardBtn = document.getElementById('forward-btn');
-    const refreshBtn = document.getElementById('refresh-btn');
-    const browserContent = document.getElementById('browser-content');
-    const loadingBar = document.getElementById('loading-bar');
-    const statusToast = document.getElementById('status-toast');
-    const lockIcon = document.getElementById('lock-icon');
-    const connectionStatus = document.getElementById('connection-status');
-    const welcomeStatus = document.getElementById('welcome-status');
-    
-    let sessionReady = false;
-    let currentUrl = '';
-    let isNavigating = false;
-    let pingInterval = null;
-    
-    function init() {
-      setupEventListeners();
-      updateWelcomeStatus('Connecting to server...');
-    }
-    
-    function setupEventListeners() {
-      goBtn.addEventListener('click', () => navigate());
-      urlInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') navigate();
-      });
-      
-      urlInput.addEventListener('focus', function() {
-        this.select();
-      });
-      
-      backBtn.addEventListener('click', () => browserAction('back'));
-      forwardBtn.addEventListener('click', () => browserAction('forward'));
-      refreshBtn.addEventListener('click', () => browserAction('refresh'));
-      
-      let lastTouchEnd = 0;
-      document.addEventListener('touchend', (e) => {
-        const now = Date.now();
-        if (now - lastTouchEnd <= 300) {
-          e.preventDefault();
-        }
-        lastTouchEnd = now;
-      }, false);
-      
-      document.addEventListener('visibilitychange', () => {
-        if (!document.hidden && socket.connected && sessionReady) {
-          sendPing();
-        }
-      });
-    }
-    
-    socket.on('connect', () => {
-      console.log('✅ Connected to server');
-      connectionStatus.classList.remove('disconnected');
-      
-      updateWelcomeStatus('Initializing browser session...');
-      socket.emit('init');
-      
-      if (pingInterval) clearInterval(pingInterval);
-      pingInterval = setInterval(sendPing, CONFIG.PING_INTERVAL);
-    });
-    
-    socket.on('ready', () => {
-      sessionReady = true;
-      console.log('✅ Session ready');
-      updateWelcomeStatus('Ready to browse!');
-      showToast('Browser ready', 'success');
-      
-      refreshBtn.disabled = false;
-      backBtn.disabled = false;
-      forwardBtn.disabled = false;
-    });
-    
-    socket.on('loading', ({ status }) => {
-      if (status) {
-        loadingBar.classList.add('active');
-        isNavigating = true;
-      } else {
-        loadingBar.classList.remove('active');
-        isNavigating = false;
-      }
-    });
-    
-    socket.on('page-content', ({ html, url, title }) => {
-      try {
-        currentUrl = url;
-        urlInput.value = url;
-        document.title = title || 'Cloud VPN Browser';
-        
-        const isSecure = url.startsWith('https://');
-        lockIcon.textContent = isSecure ? '🔒' : '🔓';
-        lockIcon.classList.toggle('secure', isSecure);
-        
-        browserContent.innerHTML = html;
-        browserContent.classList.add('rendered');
-        
-        setupPageInteractions();
-        
-        backBtn.disabled = false;
-        forwardBtn.disabled = false;
-        refreshBtn.disabled = false;
-        
-      } catch (error) {
-        console.error('❌ Error rendering:', error);
-        showError('Failed to render page');
-      }
-    });
-    
-    socket.on('navigation', ({ url, title }) => {
-      urlInput.value = url;
-      document.title = title || 'Cloud VPN Browser';
-      currentUrl = url;
-    });
-    
-    socket.on('error', ({ message, code }) => {
-      console.error('❌ Server error:', code, message);
-      showToast(message, 'error');
-      
-      if (code === 'NO_SESSION' || code === 'INIT_ERROR') {
-        sessionReady = false;
-        showError(message);
-      }
-    });
-    
-    socket.on('pong', () => {});
-    
-    socket.on('disconnect', (reason) => {
-      console.warn('⚠️ Disconnected:', reason);
-      sessionReady = false;
-      connectionStatus.classList.add('disconnected');
-      
-      if (pingInterval) {
-        clearInterval(pingInterval);
-        pingInterval = null;
-      }
-      
-      if (reason === 'io server disconnect') {
-        socket.connect();
-      }
-      
-      showToast('Connection lost. Reconnecting...', 'error');
-    });
-    
-    socket.on('reconnect_attempt', (attemptNumber) => {
-      console.log(`🔄 Reconnection attempt ${attemptNumber}`);
-      updateWelcomeStatus(`Reconnecting... (${attemptNumber}/${CONFIG.RECONNECT_ATTEMPTS})`);
-    });
-    
-    socket.on('reconnect', () => {
-      console.log('✅ Reconnected');
-      showToast('Reconnected!', 'success');
-    });
-    
-    socket.on('reconnect_failed', () => {
-      console.error('❌ Reconnection failed');
-      showError('Unable to connect. Please refresh.');
-    });
-    
-    function navigate(url) {
-      if (!sessionReady) {
-        showToast('Please wait for initialization', 'error');
-        return;
-      }
-      
-      if (isNavigating) {
-        showToast('Please wait for current page', 'error');
-        return;
-      }
-      
-      if (!url) url = urlInput.value.trim();
-      if (!url) return;
-      
-      if (url.length > CONFIG.MAX_URL_LENGTH) {
-        showToast('URL too long', 'error');
-        return;
-      }
-      
-      console.log('🔍 Navigating:', url);
-      socket.emit('navigate', { url });
-    }
-    
-    function browserAction(action) {
-      if (!sessionReady || isNavigating) return;
-      
-      console.log('🔄 Action:', action);
-      socket.emit('browser-action', { action });
-    }
-    
-    function setupPageInteractions() {
-      try {
-        browserContent.addEventListener('click', handleClick, true);
-        
-        const forms = browserContent.querySelectorAll('form');
-        forms.forEach(form => {
-          form.addEventListener('submit', handleFormSubmit);
-        });
-        
-        const inputs = browserContent.querySelectorAll('input:not([type="submit"]):not([type="button"]), textarea');
-        inputs.forEach(input => {
-          input.addEventListener('input', handleInput);
-        });
-        
-      } catch (error) {
-        console.error('❌ Setup error:', error);
-      }
-    }
-    
-    function handleClick(e) {
-      let target = e.target;
-      while (target && target !== browserContent) {
-        if (target.tagName === 'A') {
-          e.preventDefault();
-          e.stopPropagation();
-          
-          const href = target.getAttribute('href');
-          if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
-            try {
-              const absoluteUrl = new URL(href, currentUrl).href;
-              navigate(absoluteUrl);
-            } catch (error) {
-              console.error('❌ Invalid URL:', href);
+        function switchTab(tab) {
+            currentTab = tab;
+            const assistantPanel = document.getElementById('assistant-panel');
+            const previewPanel = document.getElementById('preview-panel');
+            
+            // Reset mobile tab styles
+            document.querySelectorAll('nav button').forEach(btn => btn.classList.remove('text-blue-400', 'text-gray-400'));
+            
+            if (tab === 'assistant') {
+                assistantPanel.classList.remove('hidden');
+                previewPanel.classList.add('hidden');
+                // On desktop, ensure both are visible, this logic mainly affects mobile due to CSS media queries
+                if(window.innerWidth >= 768) previewPanel.classList.remove('hidden');
+                
+                document.querySelector('nav button:nth-child(1)').classList.add('text-blue-400');
+                document.querySelector('nav button:nth-child(2)').classList.add('text-gray-400');
+            } else {
+                assistantPanel.classList.add('hidden');
+                previewPanel.classList.remove('hidden');
+                
+                document.querySelector('nav button:nth-child(1)').classList.add('text-gray-400');
+                document.querySelector('nav button:nth-child(2)').classList.add('text-blue-400');
+                
+                // Auto deploy/preview when switching to preview tab
+                deployCode();
             }
-          }
-          return false;
         }
-        
-        if (target.tagName === 'BUTTON' || (target.tagName === 'INPUT' && target.type === 'submit')) {
-          e.preventDefault();
-          e.stopPropagation();
-          
-          const selector = getUniqueSelector(target);
-          socket.emit('click', { selector });
-          return false;
+
+        function switchEditor(type) {
+            ['html', 'css', 'js'].forEach(t => {
+                document.getElementById(`code-${t}`).classList.add('hidden');
+                document.getElementById(`tab-${t}`).classList.remove('bg-gray-700', 'text-blue-300');
+                document.getElementById(`tab-${t}`).classList.add('text-gray-400');
+            });
+            document.getElementById(`code-${type}`).classList.remove('hidden');
+            document.getElementById(`tab-${type}`).classList.add('bg-gray-700', 'text-blue-300');
+            document.getElementById(`tab-${type}`).classList.remove('text-gray-400');
         }
-        
-        target = target.parentElement;
-      }
-    }
-    
-    function handleFormSubmit(e) {
-      e.preventDefault();
-      
-      const form = e.target;
-      const formData = new FormData(form);
-      const action = form.getAttribute('action') || currentUrl;
-      const method = (form.getAttribute('method') || 'get').toLowerCase();
-      
-      if (method === 'get') {
-        const params = new URLSearchParams(formData);
-        const url = action + (action.includes('?') ? '&' : '?') + params.toString();
-        navigate(url);
-      }
-    }
-    
-    function handleInput(e) {
-      const input = e.target;
-      const selector = getUniqueSelector(input);
-      socket.emit('input', { selector, value: input.value });
-    }
-    
-    function getUniqueSelector(el) {
-      if (!el || !el.tagName) return '';
-      
-      if (el.id) return '#' + el.id;
-      
-      if (el.className && typeof el.className === 'string') {
-        const classes = el.className.split(' ').filter(c => c && !c.includes(' ')).join('.');
-        if (classes) return el.tagName.toLowerCase() + '.' + classes;
-      }
-      
-      if (el.parentElement) {
-        const siblings = Array.from(el.parentElement.children);
-        const index = siblings.indexOf(el) + 1;
-        return el.tagName.toLowerCase() + `:nth-child(${index})`;
-      }
-      
-      return el.tagName.toLowerCase();
-    }
-    
-    function sendPing() {
-      if (socket.connected && sessionReady) {
-        socket.emit('ping');
-      }
-    }
-    
-    function showToast(message, type = 'info') {
-      statusToast.textContent = message;
-      statusToast.className = 'status-toast show ' + type;
-      
-      setTimeout(() => {
-        statusToast.classList.remove('show');
-      }, 3000);
-    }
-    
-    function showError(message) {
-      browserContent.innerHTML = `
-        <div class="error-screen">
-          <div class="icon">⚠️</div>
-          <h2>Connection Error</h2>
-          <p>${message}</p>
-          <button class="retry-btn" onclick="location.reload()">Reload Page</button>
-        </div>
-      `;
-    }
-    
-    function updateWelcomeStatus(text) {
-      if (welcomeStatus) {
-        welcomeStatus.textContent = text;
-      }
-    }
-    
-    window.addEventListener('error', (e) => {
-      console.error('❌ Client error:', e.error);
-    });
-    
-    window.addEventListener('unhandledrejection', (e) => {
-      console.error('❌ Unhandled rejection:', e.reason);
-    });
-    
-    init();
-  </script>
+
+        function toggleMobileMenu() {
+            const menu = document.getElementById('mobile-menu');
+            if (menu.classList.contains('translate-y-full')) {
+                menu.classList.remove('translate-y-full');
+            } else {
+                menu.classList.add('translate-y-full');
+            }
+        }
+
+        // --- CORE FUNCTIONALITY ---
+
+        function addChatMessage(role, text, isImage = false) {
+            const history = document.getElementById('chat-history');
+            const isAI = role === 'ai';
+            const color = isAI ? 'bg-purple-600' : 'bg-blue-600';
+            const align = isAI ? 'flex-row' : 'flex-row-reverse';
+            const icon = isAI ? 'fa-robot' : 'fa-user';
+            
+            let contentHTML = '';
+            if (isImage) {
+                contentHTML = `<div class="bg-gray-800 p-2 rounded-lg max-w-[80%] border border-gray-600">
+                    <p class="text-xs text-gray-400 mb-1">Screenshot received:</p>
+                    <img src="${text}" class="rounded w-full h-auto border border-gray-700" />
+                </div>`;
+            } else {
+                contentHTML = `<div class="bg-gray-800 p-3 rounded-lg ${isAI ? 'rounded-tl-none' : 'rounded-tr-none'} max-w-[80%] text-sm text-gray-200">
+                    ${text}
+                </div>`;
+            }
+
+            const html = `
+                <div class="chat-msg flex gap-3 ${align}">
+                    <div class="w-8 h-8 rounded-full ${color} flex items-center justify-center shrink-0">
+                        <i class="fa-solid ${icon}"></i>
+                    </div>
+                    ${contentHTML}
+                </div>
+            `;
+            history.insertAdjacentHTML('beforeend', html);
+            history.scrollTop = history.scrollHeight;
+        }
+
+        async function deployCode() {
+            const html = document.getElementById('code-html').value;
+            const css = document.getElementById('code-css').value;
+            const js = document.getElementById('code-js').value;
+
+            // Send to server
+            try {
+                const response = await fetch('/api/deploy', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ html, css, js })
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    // Refresh iframe with a cache-buster
+                    iframe.src = data.url + '?t=' + new Date().getTime();
+                    
+                    // Show confirmation in console log area locally just for feedback
+                    addChatMessage('ai', 'Code deployed successfully to server!');
+                }
+            } catch (e) {
+                addChatMessage('ai', 'Error deploying code: ' + e.message);
+            }
+        }
+
+        // --- AI INTEGRATION (POLLINATION) ---
+        async function askAI() {
+            const input = document.getElementById('ai-prompt');
+            const prompt = input.value.trim();
+            if (!prompt) return;
+
+            addChatMessage('user', prompt);
+            input.value = '';
+            addChatMessage('ai', 'Thinking... <i class="fa-solid fa-spinner fa-spin"></i>');
+
+            // Contextual Prompt Engineering
+            const currentHTML = document.getElementById('code-html').value;
+            const fullPrompt = `You are a web developer. The user wants: "${prompt}". 
+            Current HTML: ${currentHTML.substring(0, 500)}... 
+            Provide ONLY the raw HTML code inside the snippet to fix or create this. Do not include markdown or explanations.`;
+
+            try {
+                // Using Pollination Text API
+                const url = `https://text.pollinations.ai/${encodeURIComponent(fullPrompt)}`;
+                const response = await fetch(url);
+                const text = await response.text();
+
+                // Remove loading message
+                document.getElementById('chat-history').lastElementChild.remove();
+                
+                addChatMessage('ai', "Here is the code I generated. I've updated the HTML editor.");
+                
+                // Simple heuristic to update code (In a real app, use a better parser)
+                if (text.includes('<') && text.includes('>')) {
+                    document.getElementById('code-html').value = text;
+                } else {
+                    addChatMessage('ai', text);
+                }
+
+            } catch (err) {
+                addChatMessage('ai', 'Error connecting to AI: ' + err.message);
+            }
+        }
+
+        // --- CONSOLE LOG & SCREENSHOT HANDLING ---
+
+        // Listen for messages from the iframe (Logs & Screenshots)
+        window.addEventListener('message', (event) => {
+            const data = event.data;
+
+            if (data.type === 'console') {
+                // Show in Logs UI
+                const logsDiv = document.getElementById('console-logs');
+                const logContent = document.getElementById('log-content');
+                logsDiv.classList.remove('hidden');
+                
+                const logItem = document.createElement('div');
+                logItem.className = `border-b border-gray-800 py-1 ${data.level === 'error' ? 'text-red-400' : 'text-green-400'}`;
+                logItem.innerText = `> ${data.content}`;
+                logContent.appendChild(logItem);
+                logsDiv.scrollTop = logsDiv.scrollHeight;
+
+            } else if (data.type === 'screenshot') {
+                // Display screenshot in Chat
+                addChatMessage('ai', data.image, true);
+            }
+        });
+
+        function requestScreenshot() {
+            if (!iframe.contentWindow) return;
+            // Send message to iframe to trigger html2canvas
+            iframe.contentWindow.postMessage({ action: 'takeScreenshot' }, '*');
+        }
+
+        // Initialize
+        if(window.innerWidth >= 768) {
+            deployCode(); // Auto deploy on load for desktop
+        }
+    </script>
 </body>
 </html>
+
